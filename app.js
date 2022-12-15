@@ -5,8 +5,12 @@ const ejs=require("ejs");
 const mongoose=require("mongoose");
 const bodyparser=require("body-parser");
 const app=express();
-const bcrypt= require("bcrypt");
-const saltRounds=10;
+const session=require("express-session");
+const passport=require("passport");
+const passportLocalMongoose=require("passport-local-mongoose");
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const findOrCreate = require('mongoose-findorcreate');
+
 
 app.use(bodyparser.urlencoded({
   extended:true
@@ -15,67 +19,118 @@ app.use(bodyparser.urlencoded({
 app.use(express.static("public"));
 app.set("view engine" , "ejs");
 
+app.use(session({
+  secret: 'keyboard cat',
+  resave: false,
+  saveUninitialized: false
+}));
+
+
+app.use(passport.initialize());
+app.use(passport.session());
+
 mongoose.connect("mongodb+srv://dhruv:Dhruv@cluster0.rapcoui.mongodb.net/SecurityDB");
 
 const newUserSchema=new mongoose.Schema({
-   name:String,
+   username:String,
    password:String
 });
 
+newUserSchema.plugin(passportLocalMongoose);
+newUserSchema.plugin(findOrCreate);
+
 const NewUser=mongoose.model("NewUser",newUserSchema);
+
+passport.use(NewUser.createStrategy());
+
+
+passport.serializeUser(NewUser.serializeUser());
+passport.deserializeUser(NewUser.deserializeUser());
+
+passport.use(new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: "http://localhost:3000/auth/google/secrets"
+  },
+  function(accessToken, refreshToken, profile, cb) {
+    console.log(profile);
+    NewUser.findOrCreate({ googleId: profile.id }, function (err, user) {
+      return cb(err, user);
+    });
+  }
+));
 
 app.get("/",(req,res)=>{
   res.render("home");
-})
+});
+
+app.get("/auth/google",
+  passport.authenticate("google", { scope: ["profile"] })
+);
+
+app.get("/auth/google/secrets",
+  passport.authenticate('google', { failureRedirect: '/login' }),
+  function(req, res) {
+    res.redirect('/secrets');
+  })
 
 app.get("/login",(req,res)=>{
   res.render("login");
-})
+});
 
 
 app.get("/register",(req,res)=>{
   res.render("register");
 })
 
-app.post("/register",(req,res)=>{
-  const UserName=req.body.username;
-  const Password=req.body.password;
 
- console.log(UserName);console.log(Password);
-
- bcrypt.hash(Password,saltRounds,(err,hash)=>{
-
-    const newuser=new NewUser({
-      name:UserName,
-      password:hash
-    })
-
-    newuser.save();
-
+app.get("/secrets",(req,res)=>{
+  if (req.isAuthenticated()) {
     res.render("secrets");
- })
+  } else {
+    res.redirect("/login");
+  }
+})
+
+app.post("/register",(req,res)=>{
+    NewUser.register({username:req.body.username},req.body.password,(err,user)=>{
+      if(err){
+        console.log(err);
+        res.redirect("/register")
+      }else{
+        passport.authenticate("local")(req,res,()=>{
+          res.redirect("/secrets")
+        })
+      }
+    })
 })
 
 app.post("/login",(req,res)=>{
-  const UserName=req.body.username;
-  const Password=req.body.password;
+   const user= new NewUser({
+     username:req.body.username,
+     password:req.body.password
+   })
 
+   req.login(user,(err)=>{
+     if (err) {
+       console.log(err);
 
-  NewUser.findOne({name:UserName},(err,found)=>{
-    if(!err){
-
-      bcrypt.compare(Password,found.password,(err,result)=>{
-        if (result) {
-          res.render("secrets");
-        } else {
-          res.render("login");
-        }
-      })
-    }
-  })
+     }else{
+       passport.authenticate("local")(req,res,()=>{
+         res.redirect("/secrets");
+       })
+     }
+   })
 })
 
+app.get("/logout",(req,res)=>{
+  req.logout((err)=>{
+    if(!err){
+        res.render("home");
+    }
+  });
 
+})
 
 
 app.listen(3000,()=>{
