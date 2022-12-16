@@ -33,7 +33,9 @@ mongoose.connect("mongodb+srv://dhruv:Dhruv@cluster0.rapcoui.mongodb.net/Securit
 
 const newUserSchema=new mongoose.Schema({
    username:String,
-   password:String
+   password:String,
+   googleId:String,
+   secret:[String]
 });
 
 newUserSchema.plugin(passportLocalMongoose);
@@ -43,9 +45,8 @@ const NewUser=mongoose.model("NewUser",newUserSchema);
 
 passport.use(NewUser.createStrategy());
 
-
-passport.serializeUser(NewUser.serializeUser());
-passport.deserializeUser(NewUser.deserializeUser());
+passport.serializeUser(function(user, done) { done(null, user) });
+passport.deserializeUser(function(user, done) { done(null, user) });
 
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
@@ -86,10 +87,32 @@ app.get("/register",(req,res)=>{
 
 app.get("/secrets",(req,res)=>{
   if (req.isAuthenticated()) {
-    res.render("secrets");
+    NewUser.findOne({_id:req.user._id},(err,found)=>{
+      res.render("secrets",{
+        arr:found.secret
+      });
+    })
   } else {
     res.redirect("/login");
   }
+})
+
+app.get("/submit",(req,res)=>{
+  if (req.isAuthenticated()) {
+    res.render("submit");
+  } else {
+    res.render("login");
+  }
+})
+
+
+app.get("/logout",(req,res)=>{
+  req.logout((err)=>{
+    if(!err){
+        res.render("home");
+    }
+  });
+
 })
 
 app.post("/register",(req,res)=>{
@@ -123,15 +146,26 @@ app.post("/login",(req,res)=>{
    })
 })
 
-app.get("/logout",(req,res)=>{
-  req.logout((err)=>{
-    if(!err){
-        res.render("home");
-    }
-  });
+app.post("/submit",(req,res)=>{
+  if(req.isAuthenticated()){
+    const newSecret=req.body.secret;
+    // console.log(newSecret);
+    // console.log(req.user);
+    NewUser.findOne({_id:req.user._id},(err,found)=>{
+      if(!err){
+        found.secret.push(newSecret);
+        found.save();
+        console.log(found);
+        res.render("secrets",{
+          arr:found.secret
+        });
+      }
+    })
 
+  }else{
+    res.render("login");
+  }
 })
-
 
 app.listen(3000,()=>{
   console.log("running on 3000");
