@@ -45,7 +45,7 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-mongoose.connect("mongodb+srv://dhruv:Dhruv@cluster0.rapcoui.mongodb.net/SecurityDB");
+mongoose.connect("MONGODBID");
 
 const newUserSchema=new mongoose.Schema({
    username:String,
