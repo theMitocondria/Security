@@ -1,4 +1,20 @@
 //jshint esversion:6\
+
+// npm packages requires
+
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+
+
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+
+
+const __filename = fileURLToPath(import.meta.url);
+
+const __dirname = path.dirname(__filename);
+
 require("dotenv").config();
 const express=require("express");
 const ejs=require("ejs");
@@ -167,6 +183,6 @@ app.post("/submit",(req,res)=>{
   }
 })
 
-app.listen(3000,()=>{
-  console.log("running on 3000");
-});
+app.listen(process.env.PORT || 10000, () => {
+  console.log("hello server is running on port 10000");
+})
